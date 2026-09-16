@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gêmeo digital — bateria</title>
+<script src="libs/chart.umd.min.js"></script>
+<script src="libs/roslib.min.js"></script>
+<style>
+  :root{
+    --bg:#12161a;
+    --panel:#191f24;
+    --panel-2:#1f262c;
+    --border:#2a3238;
+    --text:#e7ebee;
+    --text-dim:#8b959d;
+    --text-faint:#5c666d;
+    --real:#38c9b9;
+    --pred:#e8a13c;
+    --forecast:#c084fc;
+    --err:#e0605a;
+    --ok:#4caf7d;
+    --font-ui: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-data: "SF Mono", "Consolas", "Menlo", monospace;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--font-ui);
+    min-height:100vh;
+  }
+  body{padding:28px 24px 60px;}
+  .wrap{max-width:1040px; margin:0 auto;}
+
+  header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    flex-wrap:wrap;
+    gap:16px;
+    border-bottom:1px solid var(--border);
+    padding-bottom:18px;
+    margin-bottom:24px;
+  }
+  h1{font-size:20px; font-weight:500; letter-spacing:0.2px;}
+  h1 span{color:var(--text-dim); font-weight:400;}
+  .conn{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-family:var(--font-data);
+    font-size:13px;
+    color:var(--text-dim);
+  }
+  .dot{width:8px; height:8px; border-radius:50%; background:var(--text-faint); transition:background .2s;}
+  .dot.on{background:var(--ok); box-shadow:0 0 0 3px rgba(76,175,125,0.18);}
+  .dot.off{background:var(--err); box-shadow:0 0 0 3px rgba(224,96,90,0.18);}
+
+  .config{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    align-items:center;
+    margin-bottom:24px;
+  }
+  .config input{
+    background:var(--panel);
+    border:1px solid var(--border);
+    color:var(--text);
+    font-family:var(--font-data);
+    font-size:13px;
+    padding:8px 10px;
+    border-radius:6px;
+    min-width:220px;
+  }
+  .config input:focus{outline:1px solid var(--real); outline-offset:0;}
+  .config button{
+    background:var(--real);
+    color:#0d1a18;
+    border:none;
+    font-family:var(--font-ui);
+    font-size:13px;
+    font-weight:500;
+    padding:9px 16px;
+    border-radius:6px;
+    cursor:pointer;
+  }
+  .config button:disabled{background:var(--panel-2); color:var(--text-faint); cursor:default;}
+  .config .field{display:flex; flex-direction:column; gap:4px;}
+  .config label{font-size:11px; color:var(--text-faint);}
+
+  .forecast-bar{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    align-items:center;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:12px 16px;
+    margin-bottom:24px;
+  }
+  .forecast-bar input{
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    color:var(--text);
+    font-family:var(--font-data);
+    font-size:13px;
+    padding:7px 10px;
+    border-radius:6px;
+    width:80px;
+  }
+  .forecast-bar button{
+    background:var(--forecast);
+    color:#1a1024;
+    border:none;
+    font-family:var(--font-ui);
+    font-size:13px;
+    font-weight:500;
+    padding:8px 14px;
+    border-radius:6px;
+    cursor:pointer;
+  }
+  .forecast-bar button:disabled{background:var(--panel-2); color:var(--text-faint); cursor:default;}
+  .forecast-bar .note{font-size:12px; color:var(--text-faint);}
+
+  .stats{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(150px,1fr));
+    gap:12px;
+    margin-bottom:20px;
+  }
+  .stat{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:14px 16px;
+  }
+  .stat .label{font-size:12px; color:var(--text-dim);}
+  .stat .value{
+    font-family:var(--font-data);
+    font-size:24px;
+    margin-top:6px;
+    color:var(--text);
+  }
+  .stat.real .value{color:var(--real);}
+  .stat.pred .value{color:var(--pred);}
+  .stat.err .value{color:var(--err);}
+  .stat .unit{font-size:13px; color:var(--text-faint); margin-left:4px;}
+
+  .chart-panel{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:20px;
+    margin-bottom:20px;
+  }
+  .chart-panel .legend{
+    display:flex;
+    gap:20px;
+    font-size:12px;
+    color:var(--text-dim);
+    margin-bottom:14px;
+  }
+  .legend-item{display:flex; align-items:center; gap:6px;}
+  .swatch{width:10px; height:10px; border-radius:2px;}
+  .swatch.dashed{background:none; border:1px dashed var(--forecast); width:14px; height:0;}
+  canvas{max-height:340px;}
+
+  .secondary{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+  }
+  .mini{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:14px 16px;
+  }
+  .mini .label{font-size:12px; color:var(--text-dim); margin-bottom:6px;}
+  .mini .value{font-family:var(--font-data); font-size:18px;}
+
+  footer{
+    margin-top:28px;
+    font-size:12px;
+    color:var(--text-faint);
+    line-height:1.6;
+  }
+  code{font-family:var(--font-data); color:var(--text-dim);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Gêmeo digital <span>— tensão da bateria</span></h1>
+    <div class="conn">
+      <div class="dot off" id="dot"></div>
+      <span id="connLabel">desconectado</span>
+    </div>
+  </header>
+
+  <div class="config">
+    <div class="field">
+      <label for="wsUrl">endereço do rosbridge</label>
+      <input id="wsUrl" type="text" value="ws://localhost:9090">
+    </div>
+    <div class="field">
+      <label for="topicReal">tópico — tensão real</label>
+      <input id="topicReal" type="text" value="/tensao">
+    </div>
+    <div class="field">
+      <label for="topicPred">tópico — tensão prevista</label>
+      <input id="topicPred" type="text" value="/tensao_predita">
+    </div>
+    <div class="field">
+      <label>&nbsp;</label>
+      <button id="btnConn">Conectar</button>
+    </div>
+  </div>
+
+  <div class="forecast-bar">
+    <span class="note">Projeção futura (rollout recursivo):</span>
+    <input id="passosFuturos" type="number" value="10" min="1" max="60">
+    <span class="note">passos</span>
+    <button id="btnPrever" disabled>Prever futuro</button>
+    <button id="btnLimparPrevisao" disabled>Limpar projeção</button>
+    <span class="note" id="forecastStatus"></span>
+  </div>
+
+  <div class="stats">
+    <div class="stat real">
+      <div class="label">tensão real</div>
+      <div class="value" id="statReal">—<span class="unit">V</span></div>
+    </div>
+    <div class="stat pred">
+      <div class="label">tensão prevista (LSTM)</div>
+      <div class="value" id="statPred">—<span class="unit">V</span></div>
+    </div>
+    <div class="stat err">
+      <div class="label">erro absoluto</div>
+      <div class="value" id="statErr">—<span class="unit">mV</span></div>
+    </div>
+  </div>
+
+  <div class="chart-panel">
+    <div class="legend">
+      <div class="legend-item"><div class="swatch" style="background:var(--real)"></div>tensão real</div>
+      <div class="legend-item"><div class="swatch" style="background:var(--pred)"></div>tensão prevista</div>
+      <div class="legend-item"><div class="swatch dashed"></div>projeção futura</div>
+    </div>
+    <canvas id="chart"></canvas>
+  </div>
+
+  <div class="secondary">
+    <div class="mini">
+      <div class="label">corrente (mA)</div>
+      <div class="value" id="statCorrente">—</div>
+    </div>
+    <div class="mini">
+      <div class="label">PWM</div>
+      <div class="value" id="statPwm">—</div>
+    </div>
+  </div>
+
+  <footer>
+    A tensão real vem do ESP32 (micro-ROS) em <code id="footTopicPred">/tensao</code>; a previsão é publicada pelo
+    nó <code>no_gemeo_digital.py</code> (LSTM <code>causal_3f_delta</code> já treinada) em <code>/tensao_predita</code>.
+    Esta página não roda inferência — apenas assina os tópicos via <code>rosbridge_server</code> e plota os valores recebidos.
+    A projeção futura pede um rollout recursivo ao mesmo nó via <code>/prever_futuro_request</code> e recebe o resultado em
+    <code>/previsao_futura</code> — como o rollout usa a própria previsão como entrada do passo seguinte, o erro tende a
+    crescer com o horizonte; trate a linha tracejada como uma estimativa, não como leitura real.
+    Suba a ponte com <code>ros2 launch rosbridge_server rosbridge_websocket_launch.xml</code> antes de conectar.
+  </footer>
+
+</div>
+
+<script>
+const MAX_POINTS = 120;
+
+const dot = document.getElementById('dot');
+const connLabel = document.getElementById('connLabel');
+const btnConn = document.getElementById('btnConn');
+const wsUrlInput = document.getElementById('wsUrl');
+const topicRealInput = document.getElementById('topicReal');
+const topicPredInput = document.getElementById('topicPred');
+
+const statReal = document.getElementById('statReal');
+const statPred = document.getElementById('statPred');
+const statErr = document.getElementById('statErr');
+const statCorrente = document.getElementById('statCorrente');
+const statPwm = document.getElementById('statPwm');
+
+const btnPrever = document.getElementById('btnPrever');
+const btnLimparPrevisao = document.getElementById('btnLimparPrevisao');
+const passosFuturosInput = document.getElementById('passosFuturos');
+const forecastStatus = document.getElementById('forecastStatus');
+
+let ros = null;
+let connected = false;
+let sampleCount = 0;
+let lastReal = null;
+let lastPred = null;
+let topicPrevisaoRequest = null;
+let topicPrevisaoResult = null;
+
+const ctx = document.getElementById('chart').getContext('2d');
+const chart = new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      {
+        label: 'Real',
+        data: [],
+        borderColor: '#38c9b9',
+        backgroundColor: 'transparent',
+        borderWidth: 2,
+        pointRadius: 0,
+        tension: 0.15
+      },
+      {
+        label: 'Previsto',
+        data: [],
+        borderColor: '#e8a13c',
+        backgroundColor: 'transparent',
+        borderWidth: 2,
+        pointRadius: 0,
+        tension: 0.15
+      },
+      {
+        label: 'Projeção futura',
+        data: [],
+        borderColor: '#c084fc',
+        backgroundColor: 'transparent',
+        borderWidth: 2,
+        borderDash: [6, 4],
+        pointRadius: 0,
+        tension: 0.15
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    animation: false,
+    interaction: { intersect: false, mode: 'index' },
+    scales: {
+      x: {
+        ticks: { color: '#5c666d', maxTicksLimit: 8, font: { family: 'monospace', size: 11 } },
+        grid: { color: '#2a3238' }
+      },
+      y: {
+        ticks: { color: '#5c666d', font: { family: 'monospace', size: 11 } },
+        grid: { color: '#2a3238' },
+        title: { display: true, text: 'V', color: '#5c666d' }
+      }
+    },
+    plugins: {
+      legend: { display: false }
+    }
+  }
+});
+
+function removerProjecao() {
+  // descarta quaisquer pontos "futuros" pendentes antes de um novo ponto real
+  const alvo = chart.data.labels.length > sampleCount ? sampleCount : chart.data.labels.length;
+  if (alvo < chart.data.labels.length) {
+    chart.data.labels.length = alvo;
+    for (const ds of chart.data.datasets) ds.data.length = alvo;
+  }
+}
+
+function pushPoint(real, pred) {
+  removerProjecao();
+  sampleCount += 1;
+  chart.data.labels.push(sampleCount);
+  chart.data.datasets[0].data.push(real);
+  chart.data.datasets[1].data.push(pred === null || pred === undefined ? null : pred);
+  chart.data.datasets[2].data.push(null);
+  while (chart.data.labels.length > MAX_POINTS) {
+    chart.data.labels.shift();
+    for (const ds of chart.data.datasets) ds.data.shift();
+  }
+  chart.update('none');
+}
+
+function desenharProjecao(valores) {
+  removerProjecao();
+  const n = chart.data.labels.length;
+  const dataset = chart.data.datasets[2];
+  dataset.data = new Array(n).fill(null);
+  if (n > 0) {
+    dataset.data[n - 1] = chart.data.datasets[0].data[n - 1] ?? chart.data.datasets[1].data[n - 1];
+  }
+  for (let i = 0; i < valores.length; i++) {
+    chart.data.labels.push(sampleCount + i + 1);
+    chart.data.datasets[0].data.push(null);
+    chart.data.datasets[1].data.push(null);
+    dataset.data.push(valores[i]);
+  }
+  chart.update('none');
+}
+
+function limparProjecao() {
+  removerProjecao();
+  chart.update('none');
+  forecastStatus.textContent = '';
+}
+
+function atualizarNumeros() {
+  if (lastReal !== null) statReal.innerHTML = lastReal.toFixed(3) + '<span class="unit">V</span>';
+  if (lastPred !== null) statPred.innerHTML = lastPred.toFixed(3) + '<span class="unit">V</span>';
+  if (lastReal !== null && lastPred !== null) {
+    const errMv = Math.abs(lastReal - lastPred) * 1000;
+    statErr.innerHTML = errMv.toFixed(1) + '<span class="unit">mV</span>';
+  } else {
+    statErr.innerHTML = '—';
+  }
+}
+
+function setConnected(state, label) {
+  connected = state;
+  dot.className = 'dot ' + (state ? 'on' : 'off');
+  connLabel.textContent = label;
+  btnConn.textContent = state ? 'Desconectar' : 'Conectar';
+  btnPrever.disabled = !state;
+  btnLimparPrevisao.disabled = !state;
+}
+
+function connect() {
+  const url = wsUrlInput.value.trim();
+  const topicRealName = topicRealInput.value.trim();
+  const topicPredName = topicPredInput.value.trim();
+  document.getElementById('footTopicPred').textContent = topicPredName;
+
+  ros = new ROSLIB.Ros({ url });
+
+  ros.on('connection', () => setConnected(true, 'conectado — ' + url));
+  ros.on('error', () => setConnected(false, 'erro de conexão'));
+  ros.on('close', () => setConnected(false, 'desconectado'));
+
+  const topicReal = new ROSLIB.Topic({ ros, name: topicRealName, messageType: 'std_msgs/Float32' });
+  const topicPred = new ROSLIB.Topic({ ros, name: topicPredName, messageType: 'std_msgs/Float32' });
+  const topicCorrente = new ROSLIB.Topic({ ros, name: '/corrente', messageType: 'std_msgs/Float32' });
+  const topicPwm = new ROSLIB.Topic({ ros, name: '/velocidade', messageType: 'std_msgs/Float32' });
+
+  topicPrevisaoRequest = new ROSLIB.Topic({ ros, name: '/prever_futuro_request', messageType: 'std_msgs/Int32' });
+  topicPrevisaoResult = new ROSLIB.Topic({ ros, name: '/previsao_futura', messageType: 'std_msgs/Float32MultiArray' });
+
+  topicReal.subscribe((msg) => { lastReal = msg.data; pushPoint(lastReal, lastPred); atualizarNumeros(); });
+  topicPred.subscribe((msg) => { lastPred = msg.data; atualizarNumeros(); });
+  topicCorrente.subscribe((msg) => { statCorrente.textContent = msg.data.toFixed(1); });
+  topicPwm.subscribe((msg) => { statPwm.textContent = msg.data.toFixed(0); });
+
+  topicPrevisaoResult.subscribe((msg) => {
+    forecastStatus.textContent = `projeção recebida (${msg.data.length} passos)`;
+    desenharProjecao(msg.data);
+  });
+}
+
+function disconnect() {
+  if (ros) ros.close();
+  setConnected(false, 'desconectado');
+}
+
+btnConn.addEventListener('click', () => {
+  if (connected) {
+    disconnect();
+  } else {
+    connect();
+  }
+});
+
+btnPrever.addEventListener('click', () => {
+  if (!topicPrevisaoRequest) return;
+  const passos = parseInt(passosFuturosInput.value, 10) || 10;
+  forecastStatus.textContent = 'pedindo projeção...';
+  topicPrevisaoRequest.publish({ data: passos });
+});
+
+btnLimparPrevisao.addEventListener('click', limparProjecao);
+</script>
+</body>
+</html>
